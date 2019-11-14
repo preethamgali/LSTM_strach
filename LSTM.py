@@ -1,7 +1,7 @@
 import numpy as np
 
-# alphabets = "abcdefghijklmnopqrstuvwxyz#"
-alphabets = "ab#"
+alphabets = "abcdefghijklmnopqrstuvwxyz#"
+# alphabets = "a#"
 
 def one_hot_encode(name):
     name = name.lower()
@@ -21,7 +21,7 @@ def normalize_data(data):
     data/=np.max(data)
     return data
 
-def clipping(data):
+def cliping(data):
     data[data>6] = 6
     data[data<-6] = -6
     return data
@@ -46,11 +46,11 @@ def sigmoid(x):
       return 1 / (1 + np.exp(-x))
 
 def sigmoid_prime(x):
-    x = sigmoid(x)
+    # x = sigmoid(x)
     return x * (1 - x)
 
 def tanh_prime(data):
-    data = np.tanh(data)
+    # data = np.tanh(data)
     return 1-data**2
 
 def softmax(data):
@@ -64,11 +64,12 @@ def cross_entropy(c_output,a_output):
 
 def dsoftmax_cross_entropy(c_output,a_output):
     return c_output - a_output
+    
 ltm_pt = 0
 stm_pt = 0
 
-input_size = 3
-hidden_size = 4
+input_size = 27
+hidden_size = input_size *2 
 
 
 #     input data weights
@@ -90,7 +91,6 @@ Wru = np.random.normal(0,1,(hidden_size,hidden_size))
 Wy = np.random.normal(0,1,(hidden_size,input_size))   
 
 def lstm(xt,stm_pt,ltm_pt):
-
       forget_gate = sigmoid(xt @ Wxf + stm_pt @ Wsf) * ltm_pt
       combine =  np.tanh(xt @ Wxc + stm_pt @ Wsc)
       ignore = sigmoid(xt @ Wxi + stm_pt @ Wsi)
@@ -99,6 +99,7 @@ def lstm(xt,stm_pt,ltm_pt):
       stm_t = np.tanh(remember_gate @ Wru) *  sigmoid(xt @ Wxu + stm_pt @ Wsu)
 
       return stm_t, ltm_t
+
 def lstm_prime(xt,stm_pt,ltm_pt):
 
     f = xt @ Wxf + stm_pt @ Wsf
@@ -114,16 +115,16 @@ def lstm_prime(xt,stm_pt,ltm_pt):
     dudXt, dudWxu, dudstm_pt, dudWsu = Wxu, xt, Wsu, stm_pt
 
     f_a = sigmoid(f)
-    df_adf = sigmoid_prime(f)
+    df_adf = sigmoid_prime(f_a)
 
     c_a = np.tanh(c)
-    dc_adc = tanh_prime(c)
+    dc_adc = tanh_prime(c_a)
 
     i_a = sigmoid(i)
-    di_adi = sigmoid_prime(i)
+    di_adi = sigmoid_prime(i_a)
 
     u_a = sigmoid(u)
-    du_adu = sigmoid_prime(u)
+    du_adu = sigmoid_prime(u_a)
     
     l = c_a * i_a
     dldc_a = i_a
@@ -152,44 +153,52 @@ def lstm_prime(xt,stm_pt,ltm_pt):
     dldi = dldi_a * di_adi
     dforget_gatedf = dforget_gatedf_a * df_adf
 
+    drdc = drdl * dldc
+    drdi = drdl * dldi
+    drdf = drdforget_gate * dforget_gatedf
+
     drdstm_pt = 0 
+    drdWxc = dcdWxc.T @ drdc 
+    drdWsc = dcdWsc.T @ drdc
+    drdstm_pt += drdc @ dcdstm_pt
 
-    drdWxc = dcdWxc.T @ (drdl * dldc) 
-    drdstm_pt += drdl * dldc * dcdstm_pt
-    drdWsc = drdl * dldc * dcdWsc
+    drdWxi = didWxi.T @ drdi
+    drdWsi = didWsi.T @ drdi
+    drdstm_pt += drdi @ didstm_pt
 
-    drdWxi = didWxi.T @ (drdl * dldi)
-    drdstm_pt += drdl * dldi * didstm_pt
-    drdWsi = drdl * dldi * didWsi
-
-    drdWxf = dfdWxf.T @ (drdforget_gate * dforget_gatedf)
-    drdstm_pt += drdforget_gate * dforget_gatedf * dfdstm_pt
-    drdWsf = drdforget_gate * dforget_gatedf * dfdWsf
+    drdWxf = dfdWxf.T @ drdf
+    drdWsf = dfdWsf.T @ drdf
+    drdstm_pt += drdf @ dfdstm_pt
 
     drdltm_pt = drdforget_gate * dforget_gatedltm_pt
 
     dstm_tdur = dstm_tdur_a * dur_adur
 
-    dstm_tdr = dstm_tdur * durdr
+    dstm_tdr = dstm_tdur @ durdr
 
-    dstm_tdWxc = drdWxc @ dstm_tdr 
+    dstm_tdWxc = dstm_tdr * drdWxc 
     dstm_tdWsc = dstm_tdr * drdWsc 
 
-    dstm_tdWxi = drdWxi @ dstm_tdr 
+    dstm_tdWxi = dstm_tdr * drdWxi 
     dstm_tdWsi = dstm_tdr * drdWsi 
 
-    dstm_tdWxf = drdWxf @ dstm_tdr 
+    dstm_tdWxf = dstm_tdr * drdWxf 
     dstm_tdWsf = dstm_tdr * drdWsf
 
     dstm_tdstm_pt = dstm_tdr * drdstm_pt
 
-    dstm_tdWru = dstm_tdur * durdWru
+    dstm_tdWru =  durdWru.T @ dstm_tdur
 
     dstm_tdltm_pt = dstm_tdr * drdltm_pt
     
-    dstm_tdWsu = dudWsu.T @  (dstm_tdu_a * du_adu)
-    dstm_tdWxu = dudWxu.T @ (dstm_tdu_a * du_adu)
-    dstm_tdstm_pt += dstm_tdu_a * du_adu * dudstm_pt
+    dstm_tdu = dstm_tdu_a * du_adu
+    
+
+    dstm_tdWsu = dudWsu.T @  dstm_tdu
+    
+    dstm_tdWxu = dudWxu.T @ dstm_tdu
+
+    dstm_tdstm_pt += dstm_tdu @ dudstm_pt
 
     dstm_t = [ dstm_tdWxf, dstm_tdWxi, dstm_tdWxc, dstm_tdWxu, dstm_tdWsf, dstm_tdWsi, dstm_tdWsc, dstm_tdWsu, dstm_tdWru, dstm_tdstm_pt, dstm_tdltm_pt]
 
@@ -197,21 +206,23 @@ def lstm_prime(xt,stm_pt,ltm_pt):
     
 
     return dstm_t,dltm_t
-	
-	def train(name):
 
+def train(name,weights):
+    Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru = weights
     xt = one_hot_encode(name)[:-1]
     yt = one_hot_encode(name)[1:]
     error = 0
-    
+  
     xs,ys,yhats,stm_ts,stm_pts,ltm_ts,ltm_pts = [],[],[],[],[],[],[]
     stm_pt,ltm_pt = np.zeros((1,hidden_size)), np.zeros((1,hidden_size))
+  
+
     for i in range(len(xt)):
 
         x,y = xt[i],yt[i]
         stm_t, ltm_t= lstm(x,stm_pt,ltm_pt)
         yhat= softmax(stm_t @ Wy)
-
+        error += np.sum(cross_entropy(yhat,y))
         xs.append(x)
         ys.append(y)
         yhats.append(yhat)
@@ -220,23 +231,25 @@ def lstm_prime(xt,stm_pt,ltm_pt):
         ltm_ts.append(ltm_t)
         ltm_pts.append(ltm_pt)
 
-        # print(x,y,yhat,stm_t,stm_pt,ltm_t,ltm_pt)
         stm_pt, ltm_pt= stm_t,ltm_t
-        # print(get_letter(yhat),end='')
+        print(get_letter(yhat),end='')
+    print()
 
-    dWxf  = np.zeros((input_size,hidden_size)),
-    dWxi  = np.zeros((input_size,hidden_size)),
-    dWxc  = np.zeros((input_size,hidden_size)),
-    dWxu  = np.zeros((input_size,hidden_size)),
+    dWxf  = np.zeros((input_size,hidden_size))
+    dWxi  = np.zeros((input_size,hidden_size))
+    dWxc  = np.zeros((input_size,hidden_size))
+    dWxu  = np.zeros((input_size,hidden_size))
   
-    dWsf  = np.zeros((hidden_size,hidden_size)),
-    dWsi  = np.zeros((hidden_size,hidden_size)),
-    dWsc  = np.zeros((hidden_size,hidden_size)),
-    dWsu  = np.zeros((hidden_size,hidden_size)),
+    dWsf  = np.zeros((hidden_size,hidden_size))
+    dWsi  = np.zeros((hidden_size,hidden_size))
+    dWsc  = np.zeros((hidden_size,hidden_size))
+    dWsu  = np.zeros((hidden_size,hidden_size))
   
-    dWru  = np.zeros((hidden_size,hidden_size)),
+    dWru  = np.zeros((hidden_size,hidden_size))
   
     dWy  = np.zeros((hidden_size,input_size))   
+    dEdstm_pt = None
+    dEdltm_pt = None
 
     for i in range(len(xt)):
 
@@ -249,16 +262,13 @@ def lstm_prime(xt,stm_pt,ltm_pt):
         dWy += stm_t.T @ dEdy
 
         dEdstm_t = dEdy @ Wy.T
-
-        dEdstm_pt = None
-        dEdltm_pt = None
         
         for j in range(i, -1, -1):
 
             dstm_td,dltm_td = lstm_prime(xs[i],stm_pts[i],ltm_pts[i])
             dstm_tdWxf, dstm_tdWxi, dstm_tdWxc, dstm_tdWxu, dstm_tdWsf, dstm_tdWsi, dstm_tdWsc, dstm_tdWsu, dstm_tdWru, dstm_tdstm_pt, dstm_tdltm_pt = dstm_td
             dltm_tdWxf, dltm_tdWxi, dltm_tdWxc, dltm_tdWsf, dltm_tdWsi, dltm_tdWsc, dltm_tdstm_pt, dltm_tdltm_pt = dltm_td
-            # print(dltm_tdltm_pt.shape)
+
             if i == j:
                  dWxf = dstm_tdWxf * dEdstm_t 
                  dWxi = dstm_tdWxi * dEdstm_t
@@ -285,15 +295,19 @@ def lstm_prime(xt,stm_pt,ltm_pt):
                  dEdltm_pt *= dstm_tdltm_pt + dltm_tdltm_pt
 
     learning_rate = 0.001
-    Wxf += learning_rate * dWxf
-    Wxi += learning_rate * dWxi
-    Wxc += learning_rate * dWxc
-    Wsf += learning_rate * dWsf
-    Wsi += learning_rate * dWsi
-    Wsc += learning_rate * dWsc
-    Wxu += learning_rate * dWxu
-    Wsu += learning_rate * dWsu
-    Wru += learning_rate * dWru
-		
-train("abba")
-    
+    Wxf -= cliping(learning_rate * dWxf)
+    Wxi -= cliping(learning_rate * dWxi)
+    Wxc -= cliping(learning_rate * dWxc)
+    Wsf -= cliping(learning_rate * dWsf)
+    Wsi -= cliping(learning_rate * dWsi)
+    Wsc -= cliping(learning_rate * dWsc)
+    Wxu -= cliping(learning_rate * dWxu)
+    Wsu -= cliping(learning_rate * dWsu)
+    Wru -= cliping(learning_rate * dWru)
+
+    weights = [Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru]
+    return weights
+
+for I in range(100):
+  for name in ["preetham","gali","nandi","naveen","kishor"]:
+    Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru = train(name,[Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru])
