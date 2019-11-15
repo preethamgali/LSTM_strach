@@ -22,8 +22,8 @@ def normalize_data(data):
     return data
 
 def cliping(data):
-    data[data>6] = 6
-    data[data<-6] = -6
+    data[data>1] = 1
+    data[data<-1] = -1
     return data
 
 def data_set():
@@ -42,8 +42,9 @@ def data_set():
     from collections import Counter
     return list(dict(Counter(names)).keys())
 
-def sigmoid(x):
-      return 1 / (1 + np.exp(-x))
+def sigmoid(data):
+      # data = data - np.max(data)
+      return 1 / (1 + np.exp(-data))
 
 def sigmoid_prime(x):
     # x = sigmoid(x)
@@ -204,7 +205,6 @@ def lstm_prime(xt,stm_pt,ltm_pt):
 
     dltm_t = [ drdWxf, drdWxi, drdWxc, drdWsf, drdWsi, drdWsc, drdstm_pt, drdltm_pt]
     
-
     return dstm_t,dltm_t
 
 def train(name,weights):
@@ -216,9 +216,8 @@ def train(name,weights):
     xs,ys,yhats,stm_ts,stm_pts,ltm_ts,ltm_pts = [],[],[],[],[],[],[]
     stm_pt,ltm_pt = np.zeros((1,hidden_size)), np.zeros((1,hidden_size))
   
-
+    print(get_letter(xt[0]),end='')
     for i in range(len(xt)):
-
         x,y = xt[i],yt[i]
         stm_t, ltm_t= lstm(x,stm_pt,ltm_pt)
         yhat= softmax(stm_t @ Wy)
@@ -230,28 +229,29 @@ def train(name,weights):
         stm_pts.append(stm_pt)
         ltm_ts.append(ltm_t)
         ltm_pts.append(ltm_pt)
-
         stm_pt, ltm_pt= stm_t,ltm_t
         print(get_letter(yhat),end='')
     print()
 
-    dWxf  = np.zeros((input_size,hidden_size))
-    dWxi  = np.zeros((input_size,hidden_size))
-    dWxc  = np.zeros((input_size,hidden_size))
-    dWxu  = np.zeros((input_size,hidden_size))
-  
-    dWsf  = np.zeros((hidden_size,hidden_size))
-    dWsi  = np.zeros((hidden_size,hidden_size))
-    dWsc  = np.zeros((hidden_size,hidden_size))
-    dWsu  = np.zeros((hidden_size,hidden_size))
-  
-    dWru  = np.zeros((hidden_size,hidden_size))
-  
-    dWy  = np.zeros((hidden_size,input_size))   
-    dEdstm_pt = None
-    dEdltm_pt = None
+    
 
     for i in range(len(xt)):
+
+        dWxf  = np.zeros((input_size,hidden_size))
+        dWxi  = np.zeros((input_size,hidden_size))
+        dWxc  = np.zeros((input_size,hidden_size))
+        dWxu  = np.zeros((input_size,hidden_size))
+      
+        dWsf  = np.zeros((hidden_size,hidden_size))
+        dWsi  = np.zeros((hidden_size,hidden_size))
+        dWsc  = np.zeros((hidden_size,hidden_size))
+        dWsu  = np.zeros((hidden_size,hidden_size))
+      
+        dWru  = np.zeros((hidden_size,hidden_size))
+      
+        dWy  = np.zeros((hidden_size,input_size))   
+        dEdstm_pt = None
+        dEdltm_pt = None
 
         stm_t = stm_pts[i]
         yt = ys[i]
@@ -291,23 +291,46 @@ def train(name,weights):
                  dWxu   += dstm_tdWxu * dEdstm_pt
                  dWsu   += dstm_tdWsu * dEdstm_pt
                  dWru   += dstm_tdWru * dEdstm_pt
-                 dEdstm_pt *=  dstm_tdstm_pt + dltm_tdstm_pt
+                 dEdstm_pt *= dstm_tdstm_pt + dltm_tdstm_pt
                  dEdltm_pt *= dstm_tdltm_pt + dltm_tdltm_pt
 
-    learning_rate = 0.001
-    Wxf -= cliping(learning_rate * dWxf)
-    Wxi -= cliping(learning_rate * dWxi)
-    Wxc -= cliping(learning_rate * dWxc)
-    Wsf -= cliping(learning_rate * dWsf)
-    Wsi -= cliping(learning_rate * dWsi)
-    Wsc -= cliping(learning_rate * dWsc)
-    Wxu -= cliping(learning_rate * dWxu)
-    Wsu -= cliping(learning_rate * dWsu)
-    Wru -= cliping(learning_rate * dWru)
+        learning_rate = 0.005
+
+        [dWxf, dWxi, dWxc, dWsf,  dWsi, dWsc, dWxu, dWsu, dWru] = [cliping(w) for  w in [dWxf, dWxi, dWxc, dWsf,  dWsi, dWsc, dWxu, dWsu, dWru]] 
+
+        Wxf -= learning_rate * dWxf
+        Wxi -= learning_rate * dWxi
+        Wxc -= learning_rate * dWxc
+        Wsf -= learning_rate * dWsf
+        Wsi -= learning_rate * dWsi
+        Wsc -= learning_rate * dWsc
+        Wxu -= learning_rate * dWxu
+        Wsu -= learning_rate * dWsu
+        Wru -= learning_rate * dWru
 
     weights = [Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru]
     return weights
-
-for I in range(100):
-  for name in ["preetham","gali","nandi","naveen","kishor"]:
+    # return [normalize_data(w) for w in weights]
+    
+for I in range(1000):
+  for name in ["lock","pick","hill","mill","gali","thin","some","more"]:
     Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru = train(name,[Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru])
+    # break
+def test(name,weights):
+    Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru = weights
+    xt = one_hot_encode(name)[:-1]
+  
+    stm_pt,ltm_pt = np.zeros((1,hidden_size)), np.zeros((1,hidden_size))
+  
+    x = xt[0]
+    print(get_letter(x),end='')
+    for i in range(len(xt)):
+        stm_t, ltm_t= lstm(x,stm_pt,ltm_pt)
+        yhat= softmax(stm_t @ Wy)
+        x = one_hot_encode(get_letter(yhat))[0]
+        stm_pt, ltm_pt= stm_t,ltm_t
+        print(get_letter(yhat),end='')
+        
+        
+name = "gali"
+test(name,[Wxf, Wxi, Wxc, Wsf,  Wsi, Wsc, Wxu, Wsu, Wru])
